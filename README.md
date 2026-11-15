@@ -21,4 +21,4 @@ Alle Vokabeln stehen in `vocab.js`. Jede Vokabel sieht so aus:
 - Sicherung exportieren und importieren (Einstellungen)
 
 ## Aufruf
-https://nu8192.github.io/vokabeltest/
+https://nu8192.github.io/Vokabeltest/
