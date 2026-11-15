@@ -8,6 +8,7 @@
     name: 'Paul', xp: 0, trophies: 0,
     streak: { count: 0, last: null }, bestCombo: 0,
     boxes: {},          // vocabId -> { box, right, wrong, last }
+    learned: {},        // vocabId -> { de: [...], en: [...] } selbst als richtig markierte Antworten
     tests: [],          // gespeicherte Tests
     badges: [],         // freigeschaltete Abzeichen-IDs
     settings: { sound: true, autoSpeak: true, unit: null, dir: 'en-de', mode: 'type', count: 10, hardOnly: false }
@@ -228,6 +229,7 @@
     // Synonyme in derselben Unit akzeptieren (z. B. "anziehen" = to put on / to get dressed)
     const from = dir === 'en-de' ? 'en' : 'de', to = dir === 'en-de' ? 'de' : 'en', fromLang = dir === 'en-de' ? 'en' : 'de';
     const mine = new Set(alternatives(v[from]).map(a => norm(a, fromLang)));
+    q.also = alternatives((dir === 'en-de' ? v.alsoDe : v.alsoEn) || '');
     q.extra = unitWords(v.unit).filter(x => x.id !== v.id && alternatives(x[from]).some(a => mine.has(norm(a, fromLang)))).flatMap(x => alternatives(x[to]));
     if (m === 'mc') {
       const key = dir === 'en-de' ? 'de' : 'en';
@@ -398,7 +400,8 @@
         e.preventDefault();
         if (quiz.answered) return next();
         if (!inp.value.trim()) { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 300); return; }
-        const extra = (q.extra || []).concat(q.mode === 'gap' && q.dir === 'de-en' ? [q.hit.form] : []);
+        const learned = ((S.learned || {})[q.id] || {})[q.lang] || [];
+        const extra = (q.extra || []).concat(q.also || [], learned, q.mode === 'gap' && q.dir === 'de-en' ? [q.hit.form] : []);
         const r = checkAnswer(inp.value, q.answer, q.lang, extra);
         inp.readOnly = true; inp.blur();
         answered(q, inp.value.trim(), r.result, r.best);
@@ -414,7 +417,10 @@
     applyResult(item);
     const fb = document.getElementById('fb');
     const ex = v.example ? `<div class="ex">📝 ${esc(v.example)}</div>` : '';
-    const sol = `<div class="sol">${esc(q.dir === 'en-de' ? v.en : v.de)} = ${esc(q.answer)}</div>`;
+    const alsoList = [...new Set((q.also || []).concat(((S.learned || {})[q.id] || {})[q.lang] || []))]
+      .filter(a => norm(a, q.lang) !== norm(given, q.lang)).slice(0, 5);
+    const also = alsoList.length ? `<div class="also">Auch richtig: ${alsoList.map(esc).join(' · ')}</div>` : '';
+    const sol = `<div class="sol">${esc(q.dir === 'en-de' ? v.en : v.de)} = ${esc(q.answer)}</div>${also}`;
     let html;
     if (result === 'right') {
       const praise = ['Stark! 💪', 'Treffer! 🎯', 'Mega! ⭐', 'Richtig! ✅', 'Nice! 😎', 'Volltreffer! 💥'];
@@ -435,12 +441,17 @@
     const ov = document.getElementById('override');
     if (ov) ov.onclick = () => {
       undoResult(item); item.result = 'right'; item.override = true; applyResult(item);
+      // Antwort merken: nächstes Mal automatisch richtig
+      S.learned = S.learned || {};
+      const L = S.learned[q.id] = S.learned[q.id] || {};
+      L[q.lang] = [...new Set((L[q.lang] || []).concat(given))];
+      save();
       ov.parentElement.className = 'feedback ok';
-      ov.parentElement.querySelector('.head').textContent = 'OK, als richtig gewertet ✅';
+      ov.parentElement.querySelector('.head').textContent = 'OK, als richtig gewertet ✅ – wird gemerkt';
       ov.remove();
       document.getElementById('next').className = 'btn big green outline';
     };
-    const chk = document.getElementById('check'); if (chk) chk.textContent = 'WEITER ➜';
+    const chk = document.getElementById('check'); if (chk) chk.style.display = 'none';
     setTimeout(() => { const n = document.getElementById('next'); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
   }
   function applyResult(item) {
@@ -620,6 +631,7 @@
         <div class="card face"><div class="tag">🇬🇧 Tippen zum Umdrehen</div><div class="word">${esc(v.en)}</div>
           <div class="small" style="margin-top:12px">${'🟩'.repeat(Math.min(lvl, 5))}${'⬜'.repeat(5 - Math.min(lvl, 5))}</div></div>
         <div class="card face back"><div class="tag">🇩🇪 Deutsch</div><div class="word">${esc(v.de)}</div>
+          ${v.alsoDe ? `<div class="small" style="margin-top:6px;color:#6b21a8;font-weight:800">auch: ${esc(v.alsoDe)}</div>` : ''}
           ${v.example ? `<div class="hint" style="font-style:italic">${esc(v.example)}</div>` : ''}</div>
       </div></div>
       <div style="height:20px"></div>
@@ -630,7 +642,7 @@
         <button class="btn" id="nxt">${c.i + 1 < c.order.length ? '▶' : '✔ Fertig'}</button>
       </div>
       <div class="panel" style="margin-top:22px"><h3>Alle Vokabeln</h3><ul class="list" style="margin-top:10px">
-        ${unitWords(c.unit).map(x => `<li><div class="grow"><b>${esc(x.en)}</b> = ${esc(x.de)}${x.example ? `<div class="small muted">${esc(x.example)}</div>` : ''}</div><button class="iconbtn" data-say="${esc(x.en)}">🔊</button></li>`).join('')}
+        ${unitWords(c.unit).map(x => `<li><div class="grow"><b>${esc(x.en)}</b> = ${esc(x.de)}${x.alsoDe ? `<span class="muted"> (auch: ${esc(x.alsoDe)})</span>` : ''}${x.example ? `<div class="small muted">${esc(x.example)}</div>` : ''}</div><button class="iconbtn" data-say="${esc(x.en)}">🔊</button></li>`).join('')}
       </ul></div>`;
     bindGo(); bindSpeakRows();
     const flip = document.getElementById('flip');

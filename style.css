@@ -139,6 +139,7 @@ input.answer:focus { background: #fff; }
 .feedback.bad { background: linear-gradient(#f87171, var(--red)); }
 .feedback .head { font-size: 30px; }
 .feedback .sol { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.feedback .also { margin-top: 4px; font-weight: 800; opacity: .95; }
 .feedback .ex { margin-top: 8px; font-style: italic; opacity: .95; }
 .feedback .diff b { background: rgba(0,0,0,.18); border-radius: 4px; padding: 0 2px; text-decoration: underline; }
 .linkbtn { text-decoration: underline; font-size: 15px; margin-top: 8px; opacity: .9; }
