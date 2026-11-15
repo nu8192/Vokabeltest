@@ -99,14 +99,31 @@
   }
 
   // ---------- Fortschritt / Ränge ----------
-  const RANKS = [
-    [0, 'Bronze', '🥉'], [100, 'Silber', '🥈'], [300, 'Gold', '🥇'], [600, 'Diamant', '💎'],
-    [1000, 'Mythisch', '🔮'], [1600, 'Legendär', '👑'], [2500, 'Meister', '🏆'], [4000, 'Vocab-Champion', '🐉']
+  // Ränge mit je 3 Stufen (I–III), ganz oben "Pro"
+  const RANK_GROUPS = [
+    { name: 'Bronze',   ico: '🥉', c1: '#e8a172', c2: '#9a5a2e', at: [0, 30, 60] },
+    { name: 'Silber',   ico: '🥈', c1: '#e5e7eb', c2: '#8b95a5', at: [100, 140, 180] },
+    { name: 'Gold',     ico: '🥇', c1: '#fde047', c2: '#d99a06', at: [230, 290, 350] },
+    { name: 'Diamant',  ico: '💎', c1: '#7dd3fc', c2: '#2563eb', at: [420, 500, 580] },
+    { name: 'Mythisch', ico: '🔮', c1: '#e879f9', c2: '#9333ea', at: [670, 770, 870] },
+    { name: 'Legendär', ico: '🔥', c1: '#fb7185', c2: '#dc2626', at: [1000, 1150, 1300] },
+    { name: 'Meister',  ico: '👑', c1: '#fef08a', c2: '#ca8a04', at: [1500, 1750, 2000] },
+    { name: 'Pro',      ico: '⭐', c1: '#a7f3d0', c2: '#059669', at: [2500] }
   ];
+  const ROMAN = ['I', 'II', 'III'];
+  const RANKS = RANK_GROUPS.flatMap(g => g.at.map((min, i) => ({
+    min, group: g, tier: g.at.length > 1 ? ROMAN[i] : '',
+    name: g.name + (g.at.length > 1 ? ' ' + ROMAN[i] : '')
+  })));
+  function emblem(r, size = 56) {
+    const g = r.group;
+    return `<span class="emblem" style="width:${size}px;height:${size}px;--c1:${g.c1};--c2:${g.c2};font-size:${size * .42}px">
+      <span>${g.ico}</span>${r.tier ? `<b style="font-size:${size * .26}px">${r.tier}</b>` : ''}</span>`;
+  }
   function rankInfo(t) {
-    let i = 0; while (i + 1 < RANKS.length && t >= RANKS[i + 1][0]) i++;
+    let i = 0; while (i + 1 < RANKS.length && t >= RANKS[i + 1].min) i++;
     const cur = RANKS[i], next = RANKS[i + 1];
-    return { name: cur[1], icon: cur[2], next, pct: next ? Math.round((t - cur[0]) / (next[0] - cur[0]) * 100) : 100 };
+    return { ...cur, icon: emblem(cur), next, pct: next ? Math.round((t - cur.min) / (next.min - cur.min) * 100) : 100 };
   }
   function levelInfo(xp) {
     let lvl = 1, need = 100, rest = xp;
@@ -274,9 +291,9 @@
         </div>
       </div>
       <div class="panel">
-        <div class="row"><span style="font-size:40px">${R.icon}</span>
+        <div class="row">${emblem(R, 72)}
           <div class="spacer"><div class="head" style="font-size:24px">Rang: ${R.name}</div>
-          ${R.next ? `<div class="small muted">Noch ${R.next[0] - S.trophies} 🏆 bis ${R.next[2]} ${R.next[1]}</div>` : '<div class="small muted">Höchster Rang erreicht!</div>'}
+          ${R.next ? `<div class="small muted">Noch ${R.next.min - S.trophies} 🏆 bis ${R.next.name}</div>` : '<div class="small muted">Höchster Rang erreicht – du bist ein Pro!</div>'}
           <div class="bar" style="margin-top:6px"><i style="width:${R.pct}%"></i></div></div>
         </div>
       </div>
@@ -527,7 +544,7 @@
         <div class="small muted">${esc(test.unit)} · ${DIRS[test.dir]} · ${MODES[test.mode]} · beste Combo 🔥${test.combo} · ${Math.floor(test.secs / 60)}:${String(test.secs % 60).padStart(2, '0')} min</div>
       </div>
       ${levelUp ? `<div class="panel center"><h3>⬆️ LEVEL UP! Du bist jetzt Level ${levelInfo(S.xp).lvl}</h3></div>` : ''}
-      ${rankUp ? `<div class="panel center"><h3>${rankInfo(S.trophies).icon} Neuer Rang: ${rankInfo(S.trophies).name}!</h3></div>` : ''}
+      ${rankUp ? `<div class="panel center pop">${emblem(rankInfo(S.trophies), 110)}<h2 class="outline" style="margin-top:10px">RANG AUFGESTIEGEN!</h2><h3>${rankInfo(S.trophies).name}</h3></div>` : ''}
       ${newBadges.length ? `<div class="panel"><h3>🏅 Neue Abzeichen!</h3><div class="badges" style="margin-top:10px">${newBadges.map(b => `<div class="badge"><div class="ico">${b.ico}</div><b>${b.name}</b>${b.desc}</div>`).join('')}</div></div>` : ''}
       ${wrong.length ? `<div class="panel"><h3>❌ Diese Wörter üben wir nochmal</h3><ul class="list" style="margin-top:10px">${wrong.map(itemRow).join('')}</ul></div>` : ''}
       ${almost.length ? `<div class="panel"><h3>✍️ Auf die Schreibweise achten</h3><ul class="list" style="margin-top:10px">${almost.map(itemRow).join('')}</ul></div>` : ''}
@@ -660,7 +677,7 @@
     $app.innerHTML = `${backBtn()}${topbar()}<h2 class="outline">🏅 Abzeichen & Ränge</h2>
       <div class="panel"><div class="badges">${BADGES.map(b => `<div class="badge ${S.badges.includes(b.id) ? '' : 'locked'}"><div class="ico">${b.ico}</div><b>${b.name}</b>${b.desc}</div>`).join('')}</div></div>
       <div class="panel"><h3>Ränge</h3><ul class="list" style="margin-top:10px">
-        ${RANKS.map(r => `<li style="${r[1] === R.name ? 'background:rgba(250,204,21,.3)' : ''}"><span style="font-size:28px">${r[2]}</span><div class="grow"><b>${r[1]}</b></div><span>ab ${r[0]} 🏆</span></li>`).join('')}
+        ${RANKS.slice().reverse().map(r => `<li style="${r.name === R.name ? 'background:rgba(250,204,21,.35);border-color:var(--yellow)' : (S.trophies >= r.min ? '' : 'opacity:.55')}">${emblem(r, 44)}<div class="grow"><b>${r.name}</b>${r.name === R.name ? ' ← du bist hier' : ''}</div><span>ab ${r.min} 🏆</span></li>`).join('')}
       </ul></div>`;
     bindGo();
   }

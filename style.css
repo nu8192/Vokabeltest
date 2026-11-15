@@ -182,3 +182,14 @@ input.answer:focus { background: #fff; }
 .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 520px) { .menu { grid-template-columns: 1fr; } h1 { font-size: 34px; } }
 table { width: 100%; border-collapse: collapse; }
+
+/* Rang-Wappen */
+.emblem { position: relative; display: inline-grid; place-items: center; flex-shrink: 0;
+  background: linear-gradient(160deg, var(--c1), var(--c2));
+  clip-path: polygon(50% 0, 95% 18%, 95% 62%, 50% 100%, 5% 62%, 5% 18%);
+  filter: drop-shadow(0 3px 0 var(--ink)); }
+.emblem::before { content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 35% 25%, rgba(255,255,255,.55), transparent 45%); }
+.emblem > span { position: relative; margin-top: -12%; }
+.emblem b { position: absolute; bottom: 14%; font-family: var(--head); font-weight: 400; color: #fff;
+  text-shadow: 0 2px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); }
