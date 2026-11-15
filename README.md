@@ -19,3 +19,6 @@ Alle Vokabeln stehen in `vocab.js`. Jede Vokabel sieht so aus:
 - Alle Tests bleiben unter „Meine Tests“ gespeichert (lokal im Browser), mit Wiederholen-Funktion
 - Karteikarten zum Lernen
 - Sicherung exportieren und importieren (Einstellungen)
+
+## Aufruf
+https://nu8192.github.io/vokabeltest/
