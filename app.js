@@ -189,9 +189,33 @@
     }
     return prev[n];
   }
-  function checkAnswer(given, answer, lang, extra = []) {
+  // Füllwörter, die beim Wort-für-Wort-Vergleich ignoriert werden
+  const STOP = {
+    de: new Set(['der', 'die', 'das', 'dem', 'den', 'des', 'ein', 'eine', 'einen', 'einem', 'einer', 'am', 'im', 'an', 'auf', 'zu', 'zum', 'zur', 'dazu', 'für', 'mit', 'von', 'vom', 'in', 'ins', 'sich', 'mal', 'etwas', 'es', 'so', 'hier']),
+    en: new Set(['the', 'a', 'an', "one's", 'your', 'my'])
+  };
+  const tolerance = L => L <= 3 ? 0 : L <= 6 ? 1 : L <= 10 ? 2 : 3;
+  const tokens = (s, lang) => s.split(' ').filter(t => t && !STOP[lang].has(t)).map(fold).filter(Boolean);
+  function wordMatch(g, n, lang) {
+    const gt = tokens(g, lang), nt = tokens(n, lang);
+    if (!nt.length || !gt.length) return false;
+    const used = new Set();
+    let hit = 0; const missing = [];
+    for (const t of nt) {
+      const i = gt.findIndex((x, k) => !used.has(k) && lev(x, t) <= tolerance(t.length));
+      if (i >= 0) { used.add(i); hit++; } else missing.push(t);
+    }
+    const extra = gt.length - used.size;           // zusätzliche eigene Wörter
+    if (hit === nt.length && extra <= (nt.length >= 3 ? 1 : 0)) return true; // alle wichtigen Wörter da
+    // ein fehlendes kleines Wort (z. B. "to") in längeren Ausdrücken verzeihen
+    if (nt.length >= 3 && hit === nt.length - 1 && extra === 0 && missing.every(t => t.length <= 3)) return true;
+    return nt.length >= 4 && hit >= nt.length - 1 && extra <= 1;            // bei langen Ausdrücken darf eines fehlen/anders sein
+  }
+  function checkAnswer(given, answer, lang, extra = [], others = []) {
     const g = norm(given, lang);
     if (!g) return { result: 'wrong' };
+    // Antwort ist exakt ein ANDERES Wort dieser Unit -> kein Tippfehler, sondern falsch
+    const isOther = others.some(o => fold(norm(o, lang)) === fold(g));
     const alts = alternatives(answer).concat(extra);
     let best = null;
     for (const a of alts) {
@@ -199,11 +223,12 @@
       if (n === g) return { result: 'right' };
       const d = lev(fold(g), fold(n));
       if (d === 0) return { result: 'right' }; // nur ae/ä, Apostroph o. Ä.
-      const L = fold(n).length;
-      const allowed = L <= 3 ? 0 : L <= 6 ? 1 : L <= 10 ? 2 : 3;
-      if (d <= allowed && (!best || d < best.d)) best = { d, a };
+      const multi = tokens(n, lang).length >= 2;
+      // Einzelwort: Tippfehler je nach Länge; Ausdruck: max. 1 Zeichen, sonst Wort-für-Wort-Vergleich
+      if (d <= (multi ? (fold(n).length >= 8 ? 1 : 0) : tolerance(fold(n).length)) && (!best || d < best.d)) best = { d, a };
+      else if (wordMatch(g, n, lang) && (!best || best.d > 50)) best = { d: 99, a };
     }
-    if (best) return { result: 'almost', best: best.a };
+    if (best && !isOther) return { result: 'almost', best: best.a };
     return { result: 'wrong' };
   }
 
@@ -250,6 +275,7 @@
     const from = dir === 'en-de' ? 'en' : 'de', to = dir === 'en-de' ? 'de' : 'en', fromLang = dir === 'en-de' ? 'en' : 'de';
     const mine = new Set(alternatives(v[from]).map(a => norm(a, fromLang)));
     q.also = alternatives((dir === 'en-de' ? v.alsoDe : v.alsoEn) || '');
+    q.others = unitWords(v.unit).filter(x => x.id !== v.id).flatMap(x => alternatives(x[to]).concat(alternatives((to === 'de' ? x.alsoDe : x.alsoEn) || '')));
     q.extra = unitWords(v.unit).filter(x => x.id !== v.id && alternatives(x[from]).some(a => mine.has(norm(a, fromLang)))).flatMap(x => alternatives(x[to]));
     if (m === 'mc') {
       const key = dir === 'en-de' ? 'de' : 'en';
@@ -422,7 +448,8 @@
         if (!inp.value.trim()) { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 300); return; }
         const learned = ((S.learned || {})[q.id] || {})[q.lang] || [];
         const extra = (q.extra || []).concat(q.also || [], learned, q.mode === 'gap' && q.dir === 'de-en' ? [q.hit.form] : []);
-        const r = checkAnswer(inp.value, q.answer, q.lang, extra);
+        const others = (q.others || []).filter(o => !extra.some(e => norm(e, q.lang) === norm(o, q.lang)));
+        const r = checkAnswer(inp.value, q.answer, q.lang, extra, others);
         inp.readOnly = true; inp.blur();
         answered(q, inp.value.trim(), r.result, r.best);
       };
