@@ -326,7 +326,13 @@
           <div class="bar" style="margin-top:6px"><i style="width:${R.pct}%"></i></div></div>
         </div>
       </div>
-      <button class="btn green big outline" data-go="setup">⚔️ TEST STARTEN</button>
+      ${S.paused ? `<div class="panel" style="border-color:var(--yellow)">
+        <div class="row"><span style="font-size:40px">⏸</span><div class="spacer">
+          <div class="head" style="font-size:22px">Pausierter Test</div>
+          <div class="small muted">${esc(S.paused.unit)} · ${DIRS[S.paused.dir]} · Frage ${S.paused.i + 1} von ${S.paused.qs.length}</div></div></div>
+        <div class="menu" style="margin-top:12px"><button class="btn green" id="resume">▶ Fortsetzen</button><button class="btn red sm" id="dropPaused">🗑️ Verwerfen</button></div>
+      </div>` : ''}
+      <button class="btn green big outline" data-go="setup">⚔️ ${S.paused ? 'NEUER TEST' : 'TEST STARTEN'}</button>
       <div style="height:20px"></div>
       <div class="menu">
         <button class="btn blue" data-go="learn">📖 Lernen</button>
@@ -337,6 +343,8 @@
       ${hard ? `<p class="center muted" style="margin-top:22px">💡 Du hast <b>${hard}</b> schwierige Vokabeln. Wähle beim Test „Nur schwierige Wörter“, um sie gezielt zu trainieren.</p>` : ''}
       ${!VOCAB.length ? '<p class="center">Noch keine Vokabeln eingetragen.</p>' : ''}`;
     bindGo();
+    const rs = document.getElementById('resume'); if (rs) rs.onclick = resumePaused;
+    const dp = document.getElementById('dropPaused'); if (dp) dp.onclick = () => { if (confirm('Pausierten Test verwerfen?')) { delete S.paused; save(); home(); } };
   }
 
   // ---------- Test einstellen ----------
@@ -391,8 +399,52 @@
 
   // ---------- Quiz ----------
   function startQuiz(words, cfg) {
+    if (S.paused && !confirm('Du hast noch einen pausierten Test. Neuen Test starten und den alten verwerfen?')) return;
     quiz = Object.assign({}, cfg, { qs: words.map(v => buildQuestion(v, cfg.dir, cfg.mode)), i: 0, items: [], combo: 0, maxCombo: 0, xp: 0, start: Date.now() });
+    delete S.paused; save();
     go('quiz');
+  }
+
+  // ---------- Pause / Fortsetzen ----------
+  // Speichert den laufenden Test (nach jeder Antwort automatisch), damit er später fortgesetzt werden kann
+  function savePaused() {
+    if (!quiz) return;
+    const { answered, ...rest } = quiz;
+    S.paused = Object.assign({}, rest, { i: answered ? quiz.i + 1 : quiz.i, elapsed: Date.now() - quiz.start, savedAt: Date.now() });
+    if (S.paused.i >= quiz.qs.length) delete S.paused;
+    save();
+  }
+  function resumePaused() {
+    const p = S.paused;
+    if (!p || !p.qs || p.qs.some(q => !BY_ID[q.id])) { delete S.paused; save(); toast('Der pausierte Test ist nicht mehr gültig.'); return go('home'); }
+    quiz = Object.assign({}, p, { start: Date.now() - (p.elapsed || 0), answered: false });
+    go('quiz');
+  }
+  function openPause() {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    const pausedAt = Date.now();
+    const done = quiz.items.length;
+    const ov = document.createElement('div');
+    ov.className = 'modal';
+    ov.innerHTML = `<div class="panel center pop" style="max-width:460px;width:100%">
+        <h2 class="outline">⏸ PAUSE</h2>
+        <p class="muted">${esc(quiz.unit)} · ${done} von ${quiz.qs.length} beantwortet</p>
+        <div style="display:grid;gap:14px">
+          <button class="btn green big outline" id="pResume">▶ WEITER</button>
+          <button class="btn blue" id="pLater">💾 Später weitermachen</button>
+          ${done ? '<button class="btn" id="pFinish">🏁 Jetzt beenden & auswerten</button>' : ''}
+          <button class="btn red" id="pDrop">🗑️ Test verwerfen</button>
+        </div></div>`;
+    document.body.appendChild(ov);
+    const close = () => { ov.remove(); quiz.start += Date.now() - pausedAt; };
+    ov.querySelector('#pResume').onclick = () => { close(); const i = document.getElementById('ans'); if (i && !quiz.answered) i.focus(); };
+    ov.querySelector('#pLater').onclick = () => { close(); savePaused(); toast('Gespeichert 💾 – du kannst später weitermachen'); quiz = null; go('home'); };
+    const fin = ov.querySelector('#pFinish');
+    if (fin) fin.onclick = () => { close(); quiz.early = true; finish(); };
+    ov.querySelector('#pDrop').onclick = () => {
+      if (!confirm('Test wirklich verwerfen? Er wird nicht gespeichert.')) return;
+      close(); delete S.paused; save(); quiz = null; go('home');
+    };
   }
   function quizScreen() {
     const q = quiz.qs[quiz.i], v = BY_ID[q.id];
@@ -420,13 +472,13 @@
       : `<form id="f" autocomplete="off"><input class="answer" id="ans" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="${q.lang === 'en' ? 'English…' : 'Deutsch…'}">
          <div style="height:14px"></div><button class="btn green big outline" type="submit" id="check">PRÜFEN</button></form>`;
     $app.innerHTML = `<div class="quizhead">
-        <button class="iconbtn" id="quit" title="Abbrechen">✖</button>
+        <button class="iconbtn" id="pause" title="Pause">⏸</button>
         <div class="bar"><i style="width:${pct}%"></i></div>
         <div class="head">${quiz.i + 1}/${quiz.qs.length}</div>
         <div class="combo">${quiz.combo >= 2 ? '🔥x' + quiz.combo : ''}</div>
       </div>
       ${card}${input}<div id="fb"></div>`;
-    document.getElementById('quit').onclick = () => { if (confirm('Test abbrechen? Der Fortschritt dieses Tests geht verloren.')) go('home'); };
+    document.getElementById('pause').onclick = openPause;
     const spk = document.getElementById('spk');
     if (spk) spk.onclick = () => speak(q.mode === 'gap' ? v.example : v.en);
     if (enShown && S.settings.autoSpeak && q.mode !== 'gap') setTimeout(() => speak(v.en), 250);
@@ -462,6 +514,7 @@
     const item = { id: q.id, q: q.prompt, a: q.answer, given, result, mode: q.mode };
     quiz.items.push(item);
     applyResult(item);
+    savePaused();
     const fb = document.getElementById('fb');
     const ex = v.example ? `<div class="ex">📝 ${esc(v.example)}</div>` : '';
     const alsoList = [...new Set((q.also || []).concat(((S.learned || {})[q.id] || {})[q.lang] || []))]
@@ -527,6 +580,8 @@
     if (p >= 50) return [4, 'Genügend']; return [5, 'Nicht genügend'];
   }
   function finish() {
+    delete S.paused;
+    if (quiz.early) quiz.label = (quiz.label ? quiz.label + ' · ' : '') + `vorzeitig beendet (${quiz.items.length}/${quiz.qs.length})`;
     const total = quiz.items.length;
     const right = quiz.items.filter(x => x.result === 'right').length;
     const almost = quiz.items.filter(x => x.result === 'almost').length;
