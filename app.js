@@ -27,6 +27,9 @@
   // ---------- Vokabeln ----------
   const VOCAB = (window.VOCAB || []).map(v => Object.assign({}, v, { id: v.unit + '|' + v.en }));
   const BY_ID = Object.fromEntries(VOCAB.map(v => [v.id, v]));
+  // Lernstand zu Vokabeln entfernen, die es nicht mehr gibt (z. B. alte Units)
+  ['boxes', 'learned'].forEach(k => { if (S[k]) Object.keys(S[k]).forEach(id => { if (!BY_ID[id]) delete S[k][id]; }); });
+  save();
   const UNITS = [...new Set(VOCAB.map(v => v.unit))].sort((a, b) => {
     if (a === 'Demo') return 1; if (b === 'Demo') return -1;
     return a.localeCompare(b, 'de', { numeric: true });
